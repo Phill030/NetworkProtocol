@@ -1,5 +1,6 @@
 use crate::errors::decode::DecodeError;
 use tokio::io::{AsyncRead, AsyncReadExt};
+use uuid::Uuid;
 
 pub trait Decoder {
     type Output;
@@ -138,11 +139,21 @@ impl<T: Decoder<Output = T>> Decoder for Vec<T> {
     async fn decode<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self::Output, DecodeError> {
         let len = reader.read_u32().await?;
 
-        let mut x_vec: Vec<T> = Vec::with_capacity(len as usize);
+        let mut x_vec: Vec<T> = Vec::with_capacity(len as usize); // (len as usize).mul(size_of::<T>()) ?
         for _ in 0..len {
             x_vec.push(T::decode(reader).await?);
         }
 
         Ok(x_vec)
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl Decoder for Uuid {
+    type Output = Self;
+
+    async fn decode<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self::Output, DecodeError> {
+        let val = reader.read_u128().await?;
+        Ok(Uuid::from_u128(val))
     }
 }

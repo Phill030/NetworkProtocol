@@ -1,6 +1,7 @@
 use crate::errors::encode::EncodeError;
 use std::future::Future;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
+use uuid::Uuid;
 
 pub trait Encoder {
     fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> impl Future<Output = Result<(), EncodeError>> + Send;
@@ -144,5 +145,12 @@ impl<T: Encoder + Sync> Encoder for Option<T> {
         } else {
             0u8.encode(writer).await
         }
+    }
+}
+
+#[cfg(feature = "uuid")]
+impl Encoder for Uuid {
+    async fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> Result<(), EncodeError> {
+        Ok(writer.write_u128(self.as_u128()).await?)
     }
 }
