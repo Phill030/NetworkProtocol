@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DecodeError {
-    #[error("Unable to read from reader")]
+    #[error("IO error occurred")]
     IO(#[from] Error),
     #[error("Found a non-boolean value")]
     NonBoolValue,
