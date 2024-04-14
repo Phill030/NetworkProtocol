@@ -23,9 +23,9 @@ impl<R: AsyncRead + Unpin> DecoderReadExt for R {
     }
 
     async fn read_string(&mut self) -> Result<String, DecodeError> {
-        let length = self.read_u32().await? as usize;
+        let len = self.read_u32().await? as usize;
 
-        let mut buf = vec![0; length];
+        let mut buf = vec![0; len];
         self.read_exact(&mut buf).await?;
 
         Ok(String::from_utf8(buf)?)
