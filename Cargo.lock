@@ -221,6 +221,8 @@ version = "0.1.0"
 dependencies = [
  "macros",
  "shared",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]
