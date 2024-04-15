@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use crate::errors::decode::DecodeError;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use uuid::Uuid;
@@ -6,6 +8,10 @@ pub trait Decoder {
     type Output;
 
     async fn decode<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self::Output, DecodeError>;
+}
+
+pub trait ReceiveFromStream: Sized {
+    async fn receive(buf: &mut Cursor<Vec<u8>>) -> Result<Self, DecodeError>;
 }
 
 pub trait DecoderReadExt {

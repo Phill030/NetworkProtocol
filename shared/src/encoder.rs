@@ -1,4 +1,4 @@
-use crate::errors::encode::EncodeError;
+use crate::{errors::encode::EncodeError, types::Hwid};
 use std::future::Future;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use uuid::Uuid;
