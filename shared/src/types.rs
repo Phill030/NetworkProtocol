@@ -1,7 +1,8 @@
-pub struct Hwid(String, String);
+use crate::encoder::Encoder;
+use macros::Serialize;
 
-impl Hwid {
-    pub fn new(cpu_id: String, system_id: String) -> Self {
-        Self(cpu_id, system_id)
-    }
+#[derive(Serialize, Clone)]
+pub struct Hwid {
+    pub cpu_id: String,
+    pub system_id: String,
 }
