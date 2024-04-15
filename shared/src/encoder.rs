@@ -1,10 +1,16 @@
-use crate::{errors::encode::EncodeError, types::Hwid};
+use crate::errors::encode::EncodeError;
 use std::future::Future;
 use tokio::io::{AsyncWrite, AsyncWriteExt};
 use uuid::Uuid;
 
 pub trait Encoder {
     fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> impl Future<Output = Result<(), EncodeError>> + Send;
+}
+
+pub trait SendToWriter {
+    async fn send<W>(&self, stream: &mut W) -> Result<(), EncodeError>
+    where
+        W: AsyncWrite + Unpin;
 }
 
 pub trait EncoderWriteExt {
