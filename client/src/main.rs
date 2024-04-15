@@ -1,8 +1,9 @@
 use machineid_rs::{Encryption, HWIDComponent, IdBuilder};
-use shared::{encoder::Encoder, messages::client::AuthenticationResponse, types::Hwid, ADDR, PORT};
+use shared::{decoder::ReceiveFromStream, encoder::SendToWriter, messages::client::AuthenticationResponse, types::Hwid, ADDR, PORT};
 use std::{
-    io::{self, Cursor},
-    net::TcpStream,
+    io::{self, Cursor, Seek},
+    thread::sleep,
+    time::Duration,
 };
 use tokio::runtime::Runtime;
 
@@ -24,18 +25,23 @@ fn main() -> io::Result<()> {
             nonce: "ABC".to_string(),
         };
 
-        let v = Vec::with_capacity(1024);
+        let v = vec![];
         let mut cursor = Cursor::new(v);
 
-        response.encode(&mut cursor).await.unwrap();
+        response.send(&mut cursor).await.unwrap();
         println!("Encoded {cursor:?}");
+
+        let rec = AuthenticationResponse::receive(&mut cursor).await.unwrap();
+        println!("{rec:?}");
     });
 
-    if let Ok(stream) = TcpStream::connect(format!("{ADDR}:{PORT}")) {
-        println!("> Connected to the server!");
-    } else {
-        panic!("> Couldn't connect to server...");
-    }
+    // if let Ok(stream) = TcpStream::connect(format!("{ADDR}:{PORT}")) {
+    //     println!("> Connected to the server!");
+    // } else {
+    //     panic!("> Couldn't connect to server...");
+    // }
+
+    std::thread::sleep(Duration::from_secs(12312312));
 
     Ok(())
 }
