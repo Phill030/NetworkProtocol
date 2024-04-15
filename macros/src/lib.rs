@@ -35,7 +35,34 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
 
-    todo!()
+    match ast.data {
+        Data::Struct(data_struct) => match data_struct.fields {
+            Fields::Named(fields) => {
+                let fields = fields.named.iter().map(|field| {
+                    let field_name = &field.ident.clone().unwrap();
+                    let field_type = &field.ty;
+
+                    quote! {
+                        #field_name: <#field_type>::decode(reader).await?,
+                    }
+                });
+
+                let gen = quote! {
+                    impl crate::decoder::Decoder for #struct_name {
+                        type Output = Self;
+
+                        async fn decode<R: AsyncRead + Unpin>(reader: &mut R) -> Result<Self::Output, DecodeError> {
+                            Ok(Self { #(#fields)* })
+                        }
+                    }
+                };
+
+                gen.into()
+            }
+            _ => panic!("Expected a named field"),
+        },
+        _ => panic!("Expected a struct with named fields"),
+    }
 }
 
 #[proc_macro_derive(Streamable, attributes(packet_id))]
@@ -50,9 +77,9 @@ pub fn derive_streamable(input: TokenStream) -> TokenStream {
         .nth(0)
         .expect("Expected a single numeric literal (#[packet_id(0x00)]");
 
-    let packet_id: i32 = {
+    let packet_id: u8 = {
         let lit: &syn::LitInt = &attribute.parse_args().unwrap();
-        let n: i32 = lit.base10_parse().expect("Expected a single numeric literal");
+        let n: u8 = lit.base10_parse().expect("Expected a single numeric literal");
         n
     };
 
@@ -69,7 +96,7 @@ pub fn derive_streamable(input: TokenStream) -> TokenStream {
                             let mut buffer = vec![];
 
                             #(self.#field_names.encode(&mut buffer).await?;)*
-                            let buffer = crate::utils::prepare_response(#packet_id, buffer).await;
+                            let buffer = crate::utils::prepare_response(#packet_id, buffer).await?;
                             Ok(stream.write_all(&buffer).await?)
                         }
                     }
@@ -103,6 +130,7 @@ pub fn derive_receivable(input: TokenStream) -> TokenStream {
                 let gen = quote! {
                     impl crate::decoder::ReceiveFromStream for #struct_name {
                         async fn receive(cursor: &mut std::io::Cursor<Vec<u8>>) -> Result<Self, crate::errors::decode::DecodeError> {
+                            println!("{cursor:?}");
                             Ok(Self { #(#fields)* })
                         }
                     }
