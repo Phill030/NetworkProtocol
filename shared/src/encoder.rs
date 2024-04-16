@@ -7,12 +7,6 @@ pub trait Encoder {
     fn encode<W: AsyncWrite + Unpin + Send>(&self, writer: &mut W) -> impl Future<Output = Result<(), EncodeError>> + Send;
 }
 
-pub trait SendToWriter {
-    async fn send<W>(&self, stream: &mut W) -> Result<(), EncodeError>
-    where
-        W: AsyncWrite + Unpin;
-}
-
 pub trait EncoderWriteExt {
     async fn write_string(&mut self, value: &str) -> Result<(), EncodeError>;
 }
