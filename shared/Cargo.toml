@@ -8,6 +8,7 @@ thiserror = "1.0.58"
 tokio = { version = "1.37.0", features = ["full"] }
 uuid = { version = "1.8.0", optional = true }
 macros = { path = "../macros" }
+textnonce = "1.0.0"
 
 
 [lib]
