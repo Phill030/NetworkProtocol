@@ -65,8 +65,8 @@ pub fn derive_deserialize(input: TokenStream) -> TokenStream {
     }
 }
 
-#[proc_macro_derive(Streamable, attributes(packet_id))]
-pub fn derive_streamable(input: TokenStream) -> TokenStream {
+#[proc_macro_derive(Networked, attributes(packet_id))]
+pub fn derive_networked(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     let struct_name = &ast.ident;
     let attributes = &ast.attrs;
@@ -88,16 +88,30 @@ pub fn derive_streamable(input: TokenStream) -> TokenStream {
             Fields::Named(fields) => {
                 let field_names = fields.named.iter().map(|field| &field.ident);
 
-                let gen = quote! {
-                    impl crate::encoder::SendToWriter for #struct_name {
-                        async fn send<W>(&self, stream: &mut W) -> Result<(), crate::errors::encode::EncodeError>
-                        where
-                            W: AsyncWrite + Unpin {
-                            let mut buffer = vec![];
+                let decode_fields = fields.named.iter().map(|field| {
+                    let field_name = &field.ident.clone().unwrap();
+                    let field_type = &field.ty;
 
+                    quote! {
+                        #field_name: <#field_type>::decode(&mut cursor).await?,
+                    }
+                });
+
+                let gen = quote! {
+                    impl crate::messages::SystemPacket for #struct_name {
+                        async fn to_bytes(&self) -> Result<Vec<u8>, EncodeError> {
+                            let mut buffer = vec![];
                             #(self.#field_names.encode(&mut buffer).await?;)*
                             let buffer = crate::utils::prepare_response(#packet_id, buffer).await?;
-                            Ok(stream.write_all(&buffer).await?)
+                            Ok(buffer)
+                        }
+                    }
+
+                    impl crate::decoder::ReceiveFromStream for #struct_name {
+                        async fn from_bytes(buffer: &[u8]) -> Result<Self, crate::errors::decode::DecodeError> {
+                            let mut cursor = std::io::Cursor::new(buffer);
+
+                            Ok(Self { #(#decode_fields)* })
                         }
                     }
                 };
@@ -107,39 +121,5 @@ pub fn derive_streamable(input: TokenStream) -> TokenStream {
             _ => panic!("Expected a named field"),
         },
         _ => panic!("Expected a struct"),
-    }
-}
-
-#[proc_macro_derive(Receivable)]
-pub fn derive_receivable(input: TokenStream) -> TokenStream {
-    let ast = parse_macro_input!(input as DeriveInput);
-    let struct_name = &ast.ident;
-
-    match ast.data {
-        Data::Struct(data_struct) => match data_struct.fields {
-            Fields::Named(fields) => {
-                let fields = fields.named.iter().map(|field| {
-                    let field_name = &field.ident.clone().unwrap();
-                    let field_type = &field.ty;
-
-                    quote! {
-                        #field_name: <#field_type>::decode(cursor).await?,
-                    }
-                });
-
-                let gen = quote! {
-                    impl crate::decoder::ReceiveFromStream for #struct_name {
-                        async fn receive(cursor: &mut std::io::Cursor<Vec<u8>>) -> Result<Self, crate::errors::decode::DecodeError> {
-                            println!("{cursor:?}");
-                            Ok(Self { #(#fields)* })
-                        }
-                    }
-                };
-
-                gen.into()
-            }
-            _ => panic!("Expected a named field"),
-        },
-        _ => panic!("Expected a struct with named fields"),
     }
 }
