@@ -93,7 +93,7 @@ pub fn derive_networked(input: TokenStream) -> TokenStream {
                     let field_type = &field.ty;
 
                     quote! {
-                        #field_name: <#field_type>::decode(&mut cursor).await?,
+                        #field_name: <#field_type>::decode(buffer).await?,
                     }
                 });
 
@@ -108,9 +108,7 @@ pub fn derive_networked(input: TokenStream) -> TokenStream {
                     }
 
                     impl crate::decoder::ReceiveFromStream for #struct_name {
-                        async fn from_bytes(buffer: &[u8]) -> Result<Self, crate::errors::decode::DecodeError> {
-                            let mut cursor = std::io::Cursor::new(buffer);
-
+                        async fn from_bytes(buffer: &mut std::io::Cursor<Vec<u8>>) -> Result<Self, crate::errors::decode::DecodeError> {
                             Ok(Self { #(#decode_fields)* })
                         }
                     }

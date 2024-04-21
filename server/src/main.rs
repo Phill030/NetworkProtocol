@@ -1,7 +1,7 @@
 use shared::{
     decoder::ReceiveFromStream,
     messages::{
-        client::{AuthenticationResponse, ClientMessageType},
+        client::{AuthenticationResponse, ClientMessageType, KeepAliveResponse},
         server::{AuthenticationRequest, KeepAliveRequest, ServerPackets},
         SystemPacket,
     },
@@ -22,6 +22,7 @@ use tokio::{
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let listener = TcpListener::bind(format!("{ADDR}:{PORT}")).await?;
+    const INTERVAL: u64 = 15;
 
     loop {
         let (stream, addr) = listener.accept().await?;
@@ -30,7 +31,7 @@ async fn main() -> io::Result<()> {
         let keep_alive_sender = sender.clone();
 
         spawn(async move { handle_client(addr, reader, sender).await });
-        spawn(async move { keep_alive(keep_alive_sender).await });
+        spawn(async move { keep_alive(keep_alive_sender, INTERVAL).await });
 
         while let Some(recv) = receiver.recv().await {
             let buffer = match recv {
@@ -66,9 +67,16 @@ async fn handle_client(addr: SocketAddr, mut reader: OwnedReadHalf, sender: Send
                     break;
                 }
 
-                match ClientMessageType::from(buffer[0]) {
+                let mut cursor = Cursor::new(buffer);
+                match ClientMessageType::from(&mut cursor).await {
                     ClientMessageType::AuthenticationResponse => {
-                        println!("{buffer:?}");
+                        let res = AuthenticationResponse::from_bytes(&mut cursor).await.unwrap();
+                        println!("{res:?}");
+                    }
+
+                    ClientMessageType::KeepAliveResponse => {
+                        let res = KeepAliveResponse::from_bytes(&mut cursor).await.unwrap();
+                        println!("{res:?}");
                     }
                     _ => panic!("Received invalid packet"),
                 }
@@ -77,17 +85,15 @@ async fn handle_client(addr: SocketAddr, mut reader: OwnedReadHalf, sender: Send
             }
             Err(why) => panic!("{why}"),
         }
-
-        println!("{}", String::from_utf8_lossy(&buffer[..]));
     }
 
     Ok(())
 }
 
-async fn keep_alive(sender: Sender<ServerPackets>) {
+async fn keep_alive(sender: Sender<ServerPackets>, interval: u64) {
     println!("Starting KeepAlive thread...");
 
-    let mut interval_timer = tokio::time::interval(Duration::from_secs(5));
+    let mut interval_timer = tokio::time::interval(Duration::from_secs(interval));
 
     loop {
         interval_timer.tick().await;

@@ -10,19 +10,24 @@ pub trait SystemPacket {
 #[macro_export]
 macro_rules! message_type {
     ($name:ident; $($variant:ident),*) => {
+        use tokio::io::AsyncReadExt;
+
         #[derive(PartialEq, Debug)]
         pub enum $name {
             $($variant),*,
             InvalidEvent,
         }
 
-        impl From<u8> for $name {
-            fn from(value: u8) -> Self {
+        impl $name {
+            pub async fn from(cursor: &mut std::io::Cursor<Vec<u8>>) -> Self {
+                let value = cursor.read_u8().await.unwrap();
+
                 match value {
                     $(x if x == $name::$variant as u8 => $name::$variant),*,
                     _ => $name::InvalidEvent,
                 }
             }
         }
+
     };
 }

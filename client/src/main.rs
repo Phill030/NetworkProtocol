@@ -1,15 +1,16 @@
 use machineid_rs::{Encryption, HWIDComponent, IdBuilder};
 use shared::{
+    decoder::ReceiveFromStream,
     messages::{
-        client::{AuthenticationResponse, ClientPackets},
-        server::ServerMessageType,
+        client::{AuthenticationResponse, ClientPackets, KeepAliveResponse},
+        server::{AuthenticationRequest, KeepAliveRequest, ServerMessageType},
         SystemPacket,
     },
     types::Hwid,
     ADDR, PORT,
 };
 use std::{
-    io::{self},
+    io::{self, Cursor},
     process,
 };
 use tokio::{
@@ -77,9 +78,11 @@ pub async fn read_messages(mut reader: OwnedReadHalf, sender: Sender<ClientPacke
                     process::exit(0);
                 }
 
-                match ServerMessageType::from(buffer[0]) {
+                let mut cursor = Cursor::new(buffer);
+                match ServerMessageType::from(&mut cursor).await {
                     ServerMessageType::AuthenticationRequest => {
-                        println!("Received AuthenticationRequest");
+                        let req = AuthenticationRequest::from_bytes(&mut cursor).await.unwrap();
+                        println!("Received AuthenticationRequest {req:?}");
 
                         sender
                             .send(ClientPackets::AuthenticationResponse(AuthenticationResponse {
@@ -87,19 +90,21 @@ pub async fn read_messages(mut reader: OwnedReadHalf, sender: Sender<ClientPacke
                                     cpu_id: cpu_id.clone(),
                                     system_id: system_id.clone(),
                                 },
-                                nonce: "ABC".to_string(),
+                                nonce: req.nonce,
                             }))
                             .await
                             .unwrap();
                     }
                     ServerMessageType::KeepAliveRequest => {
-                        println!("Received KeepAliveRequest");
+                        let req = KeepAliveRequest::from_bytes(&mut cursor).await.unwrap();
+                        println!("Received KeepAliveRequest {req:?}");
+                        sender
+                            .send(ClientPackets::KeepAliveResponse(KeepAliveResponse { timestamp: req.timestamp }))
+                            .await
+                            .unwrap();
                     }
                     _ => panic!("Received invalid packet!"),
                 }
-                println!("{}", String::from_utf8_lossy(&buffer[..]));
-
-                buffer.clear();
             }
             Err(why) => panic!("{why}"),
         }

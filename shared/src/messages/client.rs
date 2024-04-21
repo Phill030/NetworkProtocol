@@ -19,5 +19,5 @@ pub struct AuthenticationResponse {
 #[derive(Networked, Clone, Debug)]
 #[packet_id(0x01)]
 pub struct KeepAliveResponse {
-    timestamp: i64,
+    pub timestamp: i64,
 }
