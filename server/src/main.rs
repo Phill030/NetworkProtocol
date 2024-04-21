@@ -80,8 +80,6 @@ async fn handle_client(addr: SocketAddr, mut reader: OwnedReadHalf, sender: Send
                     }
                     _ => panic!("Received invalid packet"),
                 }
-
-                println!("{read}");
             }
             Err(why) => panic!("{why}"),
         }
