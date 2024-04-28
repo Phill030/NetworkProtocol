@@ -15,14 +15,14 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{tcp::OwnedReadHalf, TcpListener},
-    spawn,
     sync::mpsc::{channel, Sender},
+    task::JoinSet,
 };
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let listener = TcpListener::bind(format!("{ADDR}:{PORT}")).await?;
-    const INTERVAL: u64 = 15;
+    const KEEP_ALIVE_INTERVAL: u64 = 15;
 
     loop {
         let (stream, addr) = listener.accept().await?;
@@ -30,19 +30,30 @@ async fn main() -> io::Result<()> {
         let (sender, mut receiver) = channel::<ServerPackets>(100);
         let keep_alive_sender = sender.clone();
 
-        spawn(async move { handle_client(addr, reader, sender).await });
-        spawn(async move { keep_alive(keep_alive_sender, INTERVAL).await });
+        let mut set = JoinSet::new();
 
-        while let Some(recv) = receiver.recv().await {
-            let buffer = match recv {
-                ServerPackets::AuthenticationRequest(x) => x.to_bytes().await,
-                ServerPackets::KeepAliveRequest(x) => x.to_bytes().await,
-                _ => panic!("Invalid packet received!"),
+        set.spawn(async move { handle_client(addr, reader, sender).await });
+        set.spawn(async move { keep_alive(keep_alive_sender, KEEP_ALIVE_INTERVAL).await });
+        set.spawn(async move {
+            while let Some(recv) = receiver.recv().await {
+                let buffer = match recv {
+                    ServerPackets::AuthenticationRequest(x) => x.to_bytes().await,
+                    ServerPackets::KeepAliveRequest(x) => x.to_bytes().await,
+                }
+                .unwrap();
+
+                writer.write_all(&buffer[..]).await.unwrap();
             }
-            .unwrap();
 
-            writer.write_all(&buffer[..]).await.unwrap();
+            Ok(())
+        });
+
+        while let Some(_) = set.join_next().await {
+            drop(set);
+            break;
         }
+
+        // At this point the client is not connected anymore!
     }
 }
 
@@ -88,7 +99,7 @@ async fn handle_client(addr: SocketAddr, mut reader: OwnedReadHalf, sender: Send
     Ok(())
 }
 
-async fn keep_alive(sender: Sender<ServerPackets>, interval: u64) {
+async fn keep_alive(sender: Sender<ServerPackets>, interval: u64) -> io::Result<()> {
     println!("Starting KeepAlive thread...");
 
     let mut interval_timer = tokio::time::interval(Duration::from_secs(interval));
